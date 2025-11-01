@@ -1,59 +1,59 @@
 # Libraries Import
 import tkinter as tk
 
+cursor = 3
+
 # 電卓
 #-------------------------------------------
 # 履歴1～3が選択されたときの処理
 #-------------------------------------------
-def on_history(event):
-	code = event.widget['text']
+def on_history(no):
+	code = var_history[no].get()
 	i = code.find('=')
 	var_entry.set(code[:i] if i != -1 else code)
 
-#-------------------------------------------
-# 16進数が選択されたときの処理
-#-------------------------------------------
-def on_hex(event):
-	hex = var_base['HEX'].get()
-	if hex != '':
-		var_entry.set('0x' + hex.replace(' ', ''))
-		entry.icursor(tk.END)
+	# エントリ行は式のため16進数,10進数,2進数を消去
+	var_base['HEX'].set('')
+	var_base['DEC'].set('')
+	var_base['BIN'].set('')
+	entry.icursor(tk.END)
 
 #-------------------------------------------
-# 10進数が選択されたときの処理
+# 16進数,10進数,2進数が選択されたときの処理
 #-------------------------------------------
-def on_dec(event):
-	dec = var_base['DEC'].get()
-	if dec != '':
-		var_entry.set(dec.replace(',', ''))
-		entry.icursor(tk.END)
+def on_base(no):
+	if no == 0:
+		# 16進数が選択されたときの処理
+		hex = var_base['HEX'].get()
+		if hex != '':
+			var_entry.set('0x' + hex.replace(' ', ''))
+			entry.icursor(tk.END)
 
-#-------------------------------------------
-# 2進数が選択されたときの処理
-#-------------------------------------------
-def on_bin(event):
-	bin = var_base['BIN'].get()
-	if bin != '':
-		bin = bin.replace('\n', '')
-		bin = bin.replace(' ', '')
-		var_entry.set('0b' + bin)
-		entry.icursor(tk.END)
+	elif no == 1:
+		# 10進数が選択されたときの処理
+		dec = var_base['DEC'].get()
+		if dec != '':
+			var_entry.set(dec.replace(',', ''))
+			entry.icursor(tk.END)
+
+	elif no == 2:
+		# 2進数が選択されたときの処理
+		bin = var_base['BIN'].get()
+		if bin != '':
+			var_entry.set('0b' + bin.replace(' ', ''))
+			entry.icursor(tk.END)
 
 #-------------------------------------------
 # メモリーへの退避
 #-------------------------------------------
-def save_mem(event):
+def on_memory(event):
 	s = var_entry.get()
-	if len(s) > 34:
-		part1 = s[:34]
-		part2 = s[34:]
-		s = part1 + '\n' + part2
 	var_mem.set(s)
 
 #-------------------------------------------
 # メモリーからの取得
 #-------------------------------------------
-def load_mem(event):
+def on_load():
 	s = var_mem.get()
 	s = s.replace('\n', '')
 	var_entry.set(s)
@@ -72,6 +72,27 @@ def on_clear(event):
 	var_base['DEC'].set('')
 	var_base['BIN'].set('')
 
+	delete_cursor()
+
+#-------------------------------------------
+# カーソルの移動
+#-------------------------------------------
+def on_cursor_key(event):
+	global cursor
+	dir = event.keysym
+	cursor_table = [history[0], history[1], history[2], entry, base[0], base[1], base[2], mem]
+
+	# 現在のカーソル行の色をデフォルトに戻す
+	cursor_table[cursor].config(background=('gray20' if cursor == 3 else BG_COLOR))
+
+	# カーソルを次/前に進める
+	cursor += (1 if dir == 'Down' else -1)
+	cursor = cursor % 8
+
+	if cursor != 3:
+		# 背景色を変更する
+		cursor_table[cursor].config(background='darkslateblue')
+
 #-------------------------------------------
 # 式が実行可能か検証する
 #-------------------------------------------
@@ -83,14 +104,50 @@ def is_eval_excutable(code):
 		return False
 
 #-------------------------------------------
+# カーソルの削除
+#-------------------------------------------
+def delete_cursor():
+	global cursor
+	cursor_table = [history[0], history[1], history[2], entry, base[0], base[1], base[2], mem]
+	cursor_table[cursor].config(background=('gray20' if cursor == 3 else BG_COLOR))
+	cursor = 3
+
+#-------------------------------------------
+# カーソルキー処理
+#-------------------------------------------
+def on_cursor():
+	global cursor
+
+	# 選択項目を実行
+	if cursor >= 0 and cursor <= 2:
+		on_history(cursor)
+	elif cursor >= 4 and cursor <= 6:
+		on_base(cursor - 4)
+	elif cursor == 7:
+		on_load()
+
+	# カーソル削除
+	delete_cursor()
+
+#-------------------------------------------
 # 式でEnterキーが押されたときの処理
 #-------------------------------------------
 def on_enter(event):
 	# メッセージクリア
 	var_info.set("")
 
+	# カーソル処理
+	global cursor
+	if cursor != 3:
+		on_cursor()
+		return
+
 	# 式を取得
 	code = var_entry.get()
+
+	# 計算式ではない場合は無効
+	if any(word in code for word in ['+', '*', '-', '^', '~']) == False:
+		return
 
 	# 式が実行可能か検証
 	if is_eval_excutable(code) != True:
@@ -99,6 +156,7 @@ def on_enter(event):
 
 	# 式を実行
 	result = eval(code)
+	var_entry.set(str(result))
 
 	# 64bitの最上位が1の場合は負の値とする
 	if result >= 0x8000000000000000:
@@ -147,10 +205,6 @@ def on_enter(event):
 		# 負の数の場合
 		# 32ビットの範囲で表現するための計算
 		formatted_bin = f'{(1 << 64) + n:064_b}'
-	if len(formatted_bin) >= 40:
-		part1 = formatted_bin[:39]
-		part2 = formatted_bin[40:]
-		formatted_bin = part1 + '\n' + part2
 	var_base['BIN'].set(formatted_bin.replace('_', ' '))
 
 ################################################################################
@@ -177,11 +231,9 @@ root.update_idletasks()						# 設定値の更新
 ## ショートカットキーの登録
 ##-------------------------------------------
 root.bind('<Escape>',			on_clear)		# 画面のクリア
-root.bind('<F5>',				on_hex)			# 16進数を選択
-root.bind('<F6>',				on_dec)			# 10進数を選択
-root.bind('<F8>',				on_bin)			#  2進数を選択
-root.bind('<Alt-KeyPress-m>',	save_mem)		# メモリーへの退避
-root.bind('<Alt-KeyPress-l>',	load_mem)		# メモリーからの呼び出し
+root.bind('<Alt-KeyPress-m>',	on_memory)		# メモリーへの退避
+root.bind('<Up>',				on_cursor_key)	# カーソルの移動
+root.bind('<Down>',				on_cursor_key)	# カーソルの移動
 
 #-------------------------------------------
 # 動的変数の定義
@@ -207,10 +259,10 @@ row_offset+=1
 #-------------------------------------------
 # 履歴の配置
 #-------------------------------------------
+history = [0, 0, 0]
 for i in range(0, 3):
-	history = tk.Label(root, textvariable=var_history[i], font=(FONT,10), fg=FG_COLOR, bg=BG_COLOR, anchor='e')
-	history.grid(row=row_offset, column=0, columnspan=2, sticky='ew', padx=(PAD_X_L,PAD_X_R), pady=5)
-	history.bind('<Button-1>', on_history)
+	history[i] = tk.Label(root, textvariable=var_history[i], font=(FONT,10), fg=FG_COLOR, bg=BG_COLOR, anchor='e')
+	history[i].grid(row=row_offset, column=0, columnspan=2, sticky='ew', padx=(PAD_X_L,PAD_X_R), pady=5)
 	row_offset+=1
 
 #-------------------------------------------
@@ -218,7 +270,7 @@ for i in range(0, 3):
 #-------------------------------------------
 entry = tk.Entry(root, textvariable=var_entry, font=(FONT,20), justify=tk.RIGHT,\
 			insertbackground="gray80", relief=tk.FLAT, fg=FG_COLOR, bg="gray20")
-entry.grid(row=row_offset, column=0, columnspan=2, sticky='ew', padx=(PAD_X_L,PAD_X_R), pady=5, ipady=10)
+entry.grid(row=row_offset, column=0, columnspan=2, sticky='ew', padx=(PAD_X_L,PAD_X_R), pady=15, ipady=10)
 entry.bind('<Return>', on_enter)
 row_offset+=1
 
@@ -228,14 +280,13 @@ entry.focus_set()
 #-------------------------------------------
 # 基数(16進数,10進数,2進数)の配置
 #-------------------------------------------
+base = [0, 0, 0]
 base_table = ['HEX', 'DEC', 'BIN']
-base_handler = [on_hex, on_dec, on_bin]
 for i in range(0, len(base_table)):
 	base_label = tk.Label(root, text=base_table[i]+':', font=(FONT,10), fg=FG_COLOR, bg=BG_COLOR)
 	base_label.grid(row=row_offset, column=0, padx=(PAD_X_L,PAD_X_R), pady=5)
-	base = tk.Label(root, textvariable=var_base[base_table[i]], font=(FONT,10), fg=FG_COLOR, bg=BG_COLOR, anchor='e')
-	base.grid(row=row_offset, column=1, sticky='ew', padx=(0,PAD_X_R), pady=5)
-	base.bind('<Button-1>', base_handler[i])
+	base[i] = tk.Label(root, textvariable=var_base[base_table[i]], font=(FONT,10), fg=FG_COLOR, bg=BG_COLOR, anchor='e')
+	base[i].grid(row=row_offset, column=1, sticky='ew', padx=(0,PAD_X_R), pady=5)
 	row_offset+=1
 
 #-------------------------------------------
@@ -245,7 +296,6 @@ mem_label = tk.Label(root, text='M  :', font=(FONT,10), fg=FG_COLOR, bg=BG_COLOR
 mem_label.grid(row=row_offset, column=0, padx=(PAD_X_L,PAD_X_R), pady=5)
 mem = tk.Label(root, textvariable=var_mem, font=(FONT,10), fg=FG_COLOR, bg=BG_COLOR, anchor='e', justify=tk.RIGHT)
 mem.grid(row=row_offset, column=1, sticky='ew', padx=(0,PAD_X_R), pady=5)
-mem.bind('<Button-1>', load_mem)
 row_offset+=1
 
 #-------------------------------------------
@@ -253,7 +303,7 @@ row_offset+=1
 #-------------------------------------------
 # メッセージの配置
 info = tk.Label(root, textvariable=var_info, font=(FONT,10), fg=FG_COLOR, bg=BG_COLOR, anchor='e')
-info.grid(row=row_offset, column=0, columnspan=2, sticky='ew', padx=(PAD_X_L,PAD_X_R), pady=15)
+info.grid(row=row_offset, column=0, columnspan=2, sticky='ew', padx=(PAD_X_L,PAD_X_R), pady=10)
 row_offset+=1
 
 #--------------------------------------------------------
