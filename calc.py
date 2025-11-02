@@ -65,9 +65,6 @@ def on_load():
 def on_clear(event):
 	var_entry.set("")
 	var_info.set("")
-	var_history[0].set('')
-	var_history[1].set('')
-	var_history[2].set('')
 	var_base['HEX'].set('')
 	var_base['DEC'].set('')
 	var_base['BIN'].set('')
@@ -82,16 +79,25 @@ def on_cursor_key(event):
 	dir = event.keysym
 	cursor_table = [history[0], history[1], history[2], entry, base[0], base[1], base[2], mem]
 
-	# 現在のカーソル行の色をデフォルトに戻す
-	cursor_table[cursor].config(background=('gray20' if cursor == 3 else BG_COLOR))
+	# 現在のカーソル行の設定
+	if cursor != 3:
+		# 背景色をデフォルトに戻す
+		cursor_table[cursor].config(bg=BG_COLOR)
+	else:
+		# entryのstateをdisabledにする
+		entry.config(state='disabled')
 
 	# カーソルを次/前に進める
 	cursor += (1 if dir == 'Down' else -1)
 	cursor = cursor % 8
 
+	# 次のカーソル行の設定
 	if cursor != 3:
 		# 背景色を変更する
-		cursor_table[cursor].config(background='darkslateblue')
+		cursor_table[cursor].config(bg='darkslategrey')
+	else:
+		# entryのstateをnormalに戻す
+		entry.config(state='normal')
 
 #-------------------------------------------
 # 式が実行可能か検証する
@@ -109,7 +115,8 @@ def is_eval_excutable(code):
 def delete_cursor():
 	global cursor
 	cursor_table = [history[0], history[1], history[2], entry, base[0], base[1], base[2], mem]
-	cursor_table[cursor].config(background=('gray20' if cursor == 3 else BG_COLOR))
+	cursor_table[cursor].config(background=(BG_COLOR2 if cursor == 3 else BG_COLOR))
+	entry.config(state='normal')
 	cursor = 3
 
 #-------------------------------------------
@@ -145,8 +152,10 @@ def on_enter(event):
 	# 式を取得
 	code = var_entry.get()
 
-	# 計算式ではない場合は無効
-	if any(word in code for word in ['+', '*', '-', '^', '~']) == False:
+	# 前回の結果と同じ場合は何もしない
+	old_code = var_history[2].get()
+	i = old_code.find('=')
+	if code == (old_code[i+1:] if i != -1 else old_code):
 		return
 
 	# 式が実行可能か検証
@@ -156,19 +165,21 @@ def on_enter(event):
 
 	# 式を実行
 	result = eval(code)
-	var_entry.set(str(result))
+
+	# 例えば結果が10.0の場合、10と表示する
+	var_entry.set(str(result).rstrip('0').rstrip('.'))
 
 	# 64bitの最上位が1の場合は負の値とする
 	if result >= 0x8000000000000000:
 		result = ((1<<64) - (result & ((1<<64) - 1))) * -1
 
 	# 式が前回と違うときのみ履歴を更新する
-	if var_history[2].get() != "{}={}".format(code, result):
+	if var_history[2].get() != "{}={}".format(code, var_entry.get()):
 		var_history[0].set(var_history[1].get())
 		var_history[1].set(var_history[2].get())
-		var_history[2].set("{}={}".format(code, result))
-		var_entry.set(str(result))
-		entry.icursor(tk.END)
+		var_history[2].set("{}={}".format(code, var_entry.get()))
+
+	entry.icursor(tk.END)
 
 	################
 	# 16進数表示
@@ -189,8 +200,7 @@ def on_enter(event):
 	################
 	# 10進数表示
 	################
-	formatted_dec = f"{result:,}"
-	var_base['DEC'].set(formatted_dec)
+	var_base['DEC'].set(var_entry.get())
 
 	################
 	# 2進数表示
@@ -211,8 +221,10 @@ def on_enter(event):
 #-------------------------------------------
 # define
 #-------------------------------------------
-BG_COLOR	= 'gray13'
-FG_COLOR	= 'linen'
+BG_COLOR	= 'gray13'		# GUI背景色
+BG_COLOR2	= 'gray20'		# entyの背景色
+FG_COLOR	= 'linen'		# normalの文字色
+FG_COLOR2	= 'dimgrey'		# disabledの文字色
 FONT		= 'Lucida Console'
 PAD_X_L		= 10
 PAD_X_R		= 10
@@ -269,7 +281,8 @@ for i in range(0, 3):
 # 式の配置
 #-------------------------------------------
 entry = tk.Entry(root, textvariable=var_entry, font=(FONT,20), justify=tk.RIGHT,\
-			insertbackground="gray80", relief=tk.FLAT, fg=FG_COLOR, bg="gray20")
+			insertbackground="gray80", relief=tk.FLAT,\
+			fg=FG_COLOR, bg=BG_COLOR2, disabledforeground=FG_COLOR2, disabledbackground=BG_COLOR2)
 entry.grid(row=row_offset, column=0, columnspan=2, sticky='ew', padx=(PAD_X_L,PAD_X_R), pady=15, ipady=10)
 entry.bind('<Return>', on_enter)
 row_offset+=1
