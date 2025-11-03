@@ -100,16 +100,6 @@ def on_cursor_key(event):
 		entry.config(state='normal')
 
 #-------------------------------------------
-# 式が実行可能か検証する
-#-------------------------------------------
-def is_eval_excutable(code):
-	try:
-		result = eval(code)
-		return True
-	except Exception as e:
-		return False
-
-#-------------------------------------------
 # カーソルの削除
 #-------------------------------------------
 def delete_cursor():
@@ -158,9 +148,11 @@ def on_enter(event):
 	if code == (old_code[i+1:] if i != -1 else old_code):
 		return
 
-	# 式が実行可能か検証
-	if is_eval_excutable(code) != True:
-		var_info.set("Calculation formula that cannot be executed")
+	# 式が実行可能か検証する
+	try:
+		result = eval(code)
+	except Exception as e:
+		var_info.set(f"{e}")
 		return
 
 	# 式を実行
@@ -315,7 +307,7 @@ row_offset+=1
 # メッセージ
 #-------------------------------------------
 # メッセージの配置
-info = tk.Label(root, textvariable=var_info, font=(FONT,10), fg=FG_COLOR, bg=BG_COLOR, anchor='e')
+info = tk.Label(root, textvariable=var_info, font=(FONT,10), fg="yellow", bg=BG_COLOR, anchor='e')
 info.grid(row=row_offset, column=0, columnspan=2, sticky='ew', padx=(PAD_X_L,PAD_X_R), pady=10)
 row_offset+=1
 
