@@ -54,10 +54,17 @@ def on_memory(event):
 # メモリーからの取得
 #-------------------------------------------
 def on_load():
-	s = var_mem.get()
-	s = s.replace('\n', '')
-	var_entry.set(s)
-	entry.icursor(tk.END)
+	# カーソル位置の取得
+	i = entry.index(tk.INSERT)
+
+	# 計算式にメモリの内容を挿入して表示する
+	s = var_entry.get()
+	n = len(var_mem.get())
+	var_entry.set(s[:i] + var_mem.get() + s[i:])
+
+	# カーソル位置はメモリを挿入した最後
+#	entry.icursor(tk.INSERT)
+	entry.icursor(i + n)
 
 #-------------------------------------------
 # 表示の初期化
@@ -148,18 +155,19 @@ def on_enter(event):
 	if code == (old_code[i+1:] if i != -1 else old_code):
 		return
 
-	# 式が実行可能か検証する
+	# 式を実行。式を実行できない場合はエラー表示
 	try:
 		result = eval(code)
+		result_str = str(result)
 	except Exception as e:
 		var_info.set(f"{e}")
 		return
 
-	# 式を実行
-	result = eval(code)
-
 	# 例えば結果が10.0の場合、10と表示する
-	var_entry.set(str(result).rstrip('0').rstrip('.'))
+	if result_str.endswith(".0"):
+		result_str = result_str[:-2]
+
+	var_entry.set(result_str)
 
 	# 64bitの最上位が1の場合は負の値とする
 	if result >= 0x8000000000000000:
